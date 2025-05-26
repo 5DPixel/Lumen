@@ -1,12 +1,16 @@
 use std::collections::HashMap;
-use std::any::Any;
 use std::any::TypeId;
 use crate::ecs::entity::{EntityManager, Entity};
 use crate::ecs::components::Component;
+use crate::scene::save_load::SceneFormat;
+use serde::{Serialize, Deserialize};
+use std::fs::File;
+use std::io::Write;
+use std::io::Read;
 
 pub struct World {
     entity_manager: EntityManager,
-    components: HashMap<TypeId, Box<dyn Any>>,
+    components: HashMap<TypeId, Box<dyn SceneFormat>>,
 }
 
 impl World {
@@ -17,14 +21,17 @@ impl World {
         }
     }
 
-    pub fn register_component<T: Component + 'static>(&mut self) {
+    pub fn register_component<T>(&mut self)
+    where
+        T: Component + Serialize + for<'de> Deserialize<'de> + 'static,
+    {
         self.components.insert(TypeId::of::<T>(), Box::new(Vec::<Option<T>>::new()));
     }
 
     pub fn get_storage<T: Component + 'static>(&mut self) -> Option<&mut Vec<Option<T>>> {
         self.components
             .get_mut(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.downcast_mut::<Vec<Option<T>>>())
+            .and_then(|boxed| boxed.as_any_mut().downcast_mut::<Vec<Option<T>>>())
     }
 
     pub fn add_component<T: Component + 'static>(&mut self, entity: Entity, component: T) {
@@ -39,7 +46,7 @@ impl World {
 
     pub fn get_component<T: Component + 'static>(&self, entity: Entity) -> Option<&T> {
         self.components.get(&TypeId::of::<T>()).and_then(|boxed| {
-            boxed.downcast_ref::<Vec<Option<T>>>().and_then(|storage| {
+            boxed.as_any().downcast_ref::<Vec<Option<T>>>().and_then(|storage| {
                 storage.get(entity.id() as usize).and_then(|opt| opt.as_ref())
             })
         })
@@ -47,7 +54,7 @@ impl World {
 
     pub fn get_component_mut<T: Component + 'static>(&mut self, entity: Entity) -> Option<&mut T> {
         self.components.get_mut(&TypeId::of::<T>()).and_then(|boxed| {
-            boxed.downcast_mut::<Vec<Option<T>>>().and_then(|storage| {
+            boxed.as_any_mut().downcast_mut::<Vec<Option<T>>>().and_then(|storage| {
                 storage.get_mut(entity.id() as usize).and_then(|opt| opt.as_mut())
             })
         })
@@ -65,4 +72,32 @@ impl World {
     pub fn create_entity(&mut self) -> Entity {
         self.entity_manager.create_entity()
     }
+
+    pub fn save_to_file(&self, path: &str) {
+        let mut file = File::create(path).expect("failed to create file!");
+        file.write_all(b"LSCN").expect("failed to write magic bytes!");
+        bincode::serialize_into(&mut file, &self.components.len()).expect("failed to write component count!");
+
+        for (_type_id, component_storage) in &self.components {
+            component_storage.serialize_component_data(&mut file);
+        }
+    }
+
+    pub fn load_from_file(&mut self, path: &str) {
+        let mut file = File::open(path).expect("failed to open file!");
+
+        let mut magic = [0u8; 4];
+        file.read_exact(&mut magic).expect("failed to read magic bytes!");
+        if &magic != b"LSCN" {
+            panic!("invalid file format: magic bytes do not match!");
+        }
+
+        let count: usize = bincode::deserialize_from(&mut file).expect("failed to read component count!");
+        assert_eq!(count, self.components.len(), "component count mismatch!");
+
+        for component_storage in self.components.values_mut() {
+            component_storage.deserialize_component_data(&mut file);
+        }
+    }
+
 }

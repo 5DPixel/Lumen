@@ -1,12 +1,27 @@
-use cgmath::Vector3;
-
 pub trait Component: 'static {}
 
 impl<T: 'static> Component for T {}
 
-#[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct SerializableVector3<T> {
+    pub x: T,
+    pub y: T,
+    pub z: T
+}
+
+impl<T> SerializableVector3<T> {
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Self {
+            x,
+            y,
+            z
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Transform {
-    pub position: Vector3<f32>,
-    pub rotation: Vector3<f32>,
-    pub scale: Vector3<f32>,
+    pub position: SerializableVector3<f32>,
+    pub rotation: SerializableVector3<f32>,
+    pub scale: SerializableVector3<f32>,
 }

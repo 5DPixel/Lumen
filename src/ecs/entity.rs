@@ -5,6 +5,10 @@ impl Entity {
     pub fn id(&self) -> u32 {
         self.0
     }
+
+    pub fn from_id(id: u32) -> Self {
+        Entity(id)
+    }
 }
 
 pub struct EntityManager {

@@ -10,10 +10,13 @@ pub mod renderer {
 
 pub mod ecs {
     pub mod entity;
-    pub mod storage;
     pub mod system;
     pub mod world;
     pub mod components;
+}
+
+pub mod scene {
+    pub mod save_load;
 }
 
 pub mod resources;
