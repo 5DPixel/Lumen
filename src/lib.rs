@@ -8,4 +8,12 @@ pub mod renderer {
     pub mod hdr;
 }
 
+pub mod ecs {
+    pub mod entity;
+    pub mod storage;
+    pub mod system;
+    pub mod world;
+    pub mod components;
+}
+
 pub mod resources;
