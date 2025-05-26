@@ -1,7 +1,7 @@
 use wgpu::Operations;
 
-use crate::window::create_render_pipeline;
-use crate::texture::Texture;
+use crate::renderer::window::create_render_pipeline;
+use crate::renderer::texture::Texture;
 
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -67,7 +67,7 @@ impl HdrPipeline {
             ],
         });
 
-        let shader = wgpu::include_wgsl!("shaders/hdr.wgsl");
+        let shader = wgpu::include_wgsl!("../shaders/hdr.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&layout],

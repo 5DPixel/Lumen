@@ -1,5 +1,5 @@
-use crate::texture::{Texture, CubeTexture};
-use crate::vertex::{ModelVertex, Material, Mesh, Model};
+use crate::renderer::texture::{Texture, CubeTexture};
+use crate::renderer::vertex::{ModelVertex, Material, Mesh, Model};
 use wgpu::util::DeviceExt;
 use image::codecs::hdr::HdrDecoder;
 

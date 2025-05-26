@@ -12,14 +12,15 @@ use cgmath::Zero;
 use cgmath::Rotation3;
 use cgmath::InnerSpace;
 
-use crate::{camera::CameraController, instancing::InstanceRaw, lighting::LightUniform, resources::HdrLoader, vertex::{ModelVertex, Vertex}};
-use crate::texture::Texture;
-use crate::camera::{Camera, CameraUniform, Projection};
-use crate::instancing::{Instance, NUM_INSTANCES_PER_ROW};
+use crate::renderer::{camera::CameraController, instancing::InstanceRaw, lighting::LightUniform, vertex::{ModelVertex, Vertex}};
+use crate::resources::HdrLoader;
+use crate::renderer::texture::Texture;
+use crate::renderer::camera::{Camera, CameraUniform, Projection};
+use crate::renderer::instancing::{Instance, NUM_INSTANCES_PER_ROW};
 use crate::resources;
-use crate::vertex::{Model, DrawModel};
-use crate::hdr::HdrPipeline;
-use crate::vertex::DrawLight;
+use crate::renderer::vertex::{Model, DrawModel};
+use crate::renderer::hdr::HdrPipeline;
+use crate::renderer::vertex::DrawLight;
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -316,7 +317,7 @@ impl<'a> State<'a> {
         let render_pipeline = {
             let shader = wgpu::ShaderModuleDescriptor {
                 label: Some("Normal Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/default.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/default.wgsl").into()),
             };
             create_render_pipeline(
                 &device,
@@ -336,7 +337,7 @@ impl<'a> State<'a> {
             });
             let shader = wgpu::ShaderModuleDescriptor {
                 label: Some("Light Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/light.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/light.wgsl").into()),
             };
             create_render_pipeline(
                 &device,
@@ -354,7 +355,7 @@ impl<'a> State<'a> {
                 bind_group_layouts: &[&camera_bind_group_layout, &environment_layout],
                 push_constant_ranges: &[],
             });
-            let shader = wgpu::include_wgsl!("shaders/sky.wgsl");
+            let shader = wgpu::include_wgsl!("../shaders/sky.wgsl");
             create_render_pipeline(
                 &device,
                 &layout,
