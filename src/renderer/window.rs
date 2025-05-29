@@ -3,9 +3,7 @@ use winit::{
     event::*,
     event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
-    window::WindowBuilder,
-    window::Window,
-    window::CursorGrabMode,
+    window::{CursorIcon, Window, WindowBuilder},
 };
 
 use cgmath::Zero;
@@ -25,6 +23,8 @@ use crate::renderer::vertex::DrawLight;
 
 use imgui::*;
 use imgui_wgpu::{Renderer, RendererConfig};
+
+use std::path::PathBuf;
 
 use super::ui::ui_theme;
 
@@ -384,7 +384,7 @@ impl<'a> State<'a> {
             &window,
             imgui_winit_support::HiDpiMode::Default,
         );
-        imgui.set_ini_filename(None);
+        imgui.set_ini_filename(PathBuf::from("imgui.ini"));
 
         let hidpi_factor = window.scale_factor();
         let font_size = (13.0 * hidpi_factor) as f32;
@@ -406,14 +406,14 @@ impl<'a> State<'a> {
 
         let font = imgui.fonts().add_font(&[FontSource::TtfData {
             data: &load_font("Montserrat-Regular.ttf").unwrap(),
-            size_pixels: 16.0,
+            size_pixels: 20.0,
             config: Some(FontConfig {
                 rasterizer_multiply: 1.75,
                 ..FontConfig::default()
             }),
         }]);
 
-        ui_theme(&mut imgui);
+        ui_theme(&mut imgui, hidpi_factor as f32);
 
         renderer.reload_font_texture(&mut imgui, &device, &queue);
 
@@ -503,6 +503,14 @@ impl<'a> State<'a> {
                 .into();
         self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
         self.imgui.io_mut().update_delta_time(dt);
+
+        let cursor = if self.right_mouse_pressed {
+            CursorIcon::Grabbing
+        } else {
+            CursorIcon::Default
+        };
+
+        self.window().set_cursor_icon(cursor);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -573,16 +581,53 @@ impl<'a> State<'a> {
         let ui = self.imgui.frame();
         let token = ui.push_font(self.font);
 
-        {
-            let window = ui.window("hello, imgui!");
-            window
-                .size([300.0, 100.0], Condition::FirstUseEver)
-                .build(|| {
-                    ui.text("hello world!");
-                    ui.text("this is a demo of imgui-rs using imgui-wgpu!");
-                    ui.button("button test");
-                });
-        }
+        ui.main_menu_bar(|| {
+            ui.menu("File", || {
+                if ui.menu_item("New") {
+                    println!("New file selected");
+                }
+                if ui.menu_item("Open") {
+                    println!("Open selected");
+                }
+                if ui.menu_item("Save") {
+                    println!("Save selected");
+                }
+                ui.separator();
+                if ui.menu_item("Exit") {
+                    println!("Exit selected");
+                }
+            });
+
+            ui.menu("Settings", || {
+                if ui.menu_item("Appearance"){
+                    println!("Appearance settings!");
+                }
+            });
+
+            ui.menu("Assets", || {
+                if ui.menu_item("Import") {
+                    println!("Import selected");
+                }
+                if ui.menu_item("Manage") {
+                    println!("Manage selected");
+                }
+            });
+
+            ui.menu("Help", || {
+                if ui.menu_item("About") {
+                    println!("About selected");
+                }
+            });
+        });
+
+        let window = ui.window("hello, imgui!");
+        window
+            .size([300.0, 100.0], Condition::FirstUseEver)
+            .build(|| {
+                ui.text("hello world!");
+                ui.text("this is a demo of imgui-rs using imgui-wgpu!");
+                ui.button("button test");
+        });
 
         token.pop();
 
@@ -623,15 +668,22 @@ pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    window.set_cursor_visible(false);
-
-    let _ = window.set_cursor_grab(CursorGrabMode::Confined)
-        .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked));
-
     let mut state = State::new(&window).await;
     let mut last_render_time = instant::Instant::now();
 
     event_loop.run(move |event, control_flow| {
+        let State {
+            window,
+            imgui,
+            platform,
+            ..
+        } = &mut state;
+
+        {
+            let io = imgui.io_mut();
+            platform.handle_event(io, window, &event);
+        }
+
         match event {
             Event::DeviceEvent {
                 event: DeviceEvent::MouseMotion{ delta, },

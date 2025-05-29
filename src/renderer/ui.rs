@@ -1,9 +1,21 @@
 use imgui::{Context};
 
-pub fn ui_theme(imgui: &mut Context) {
+pub fn ui_theme(imgui: &mut Context, hidpi_factor: f32) {
     let style = imgui.style_mut();
     #[allow(unused_mut)]
     let mut colors = &mut style.colors;
+
+    style.window_rounding *= hidpi_factor;
+    style.frame_rounding *= hidpi_factor;
+    style.grab_rounding *= hidpi_factor;
+    style.scrollbar_rounding *= hidpi_factor;
+
+    style.frame_padding = [5.0 * hidpi_factor, 3.0 * hidpi_factor];
+    style.item_spacing = [6.0 * hidpi_factor, 4.0 * hidpi_factor];
+    style.item_inner_spacing = [4.0 * hidpi_factor, 3.0 * hidpi_factor];
+    style.window_padding = [8.0 * hidpi_factor, 8.0 * hidpi_factor];
+    style.scrollbar_size = 12.0 * hidpi_factor;
+    style.grab_min_size = 8.0 * hidpi_factor;
 
     // Minimalist rounding
     style.window_rounding = 4.0;
