@@ -6,6 +6,7 @@ pub mod renderer {
     pub mod instancing;
     pub mod lighting;
     pub mod hdr;
+    pub mod ui;
 }
 
 pub mod ecs {

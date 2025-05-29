@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 pub trait Component: 'static {}
 
 impl<T: 'static> Component for T {}
@@ -19,9 +21,19 @@ impl<T> SerializableVector3<T> {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transform {
     pub position: SerializableVector3<f32>,
     pub rotation: SerializableVector3<f32>,
     pub scale: SerializableVector3<f32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MeshData {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ModelRenderer {
+    pub meshes: Vec<MeshData>,
 }

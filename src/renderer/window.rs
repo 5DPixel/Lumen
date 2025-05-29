@@ -12,15 +12,21 @@ use cgmath::Zero;
 use cgmath::Rotation3;
 use cgmath::InnerSpace;
 
-use crate::renderer::{camera::CameraController, instancing::InstanceRaw, lighting::LightUniform, vertex::{ModelVertex, Vertex}};
+use crate::{renderer::{camera::CameraController, instancing::InstanceRaw, lighting::LightUniform, vertex::{ModelVertex, Vertex}}};
 use crate::resources::HdrLoader;
 use crate::renderer::texture::Texture;
 use crate::renderer::camera::{Camera, CameraUniform, Projection};
 use crate::renderer::instancing::{Instance, NUM_INSTANCES_PER_ROW};
 use crate::resources;
+use crate::resources::load_font;
 use crate::renderer::vertex::{Model, DrawModel};
 use crate::renderer::hdr::HdrPipeline;
 use crate::renderer::vertex::DrawLight;
+
+use imgui::*;
+use imgui_wgpu::{Renderer, RendererConfig};
+
+use super::ui::ui_theme;
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -34,6 +40,7 @@ struct State<'a> {
     camera: Camera,
     projection: Projection,
     camera_controller: CameraController,
+    right_mouse_pressed: bool,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -47,6 +54,10 @@ struct State<'a> {
     hdr: HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
+    imgui: imgui::Context,
+    platform: imgui_winit_support::WinitPlatform,
+    renderer: Renderer,
+    font: imgui::FontId,
 }
 
 impl<'a> State<'a> {
@@ -366,6 +377,45 @@ impl<'a> State<'a> {
             )
         };
 
+        let mut imgui = imgui::Context::create();
+        let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
+        platform.attach_window(
+            imgui.io_mut(),
+            &window,
+            imgui_winit_support::HiDpiMode::Default,
+        );
+        imgui.set_ini_filename(None);
+
+        let hidpi_factor = window.scale_factor();
+        let font_size = (13.0 * hidpi_factor) as f32;
+        imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
+        imgui.fonts().add_font(&[FontSource::DefaultFontData {
+            config: Some(imgui::FontConfig {
+                oversample_h: 1,
+                pixel_snap_h: true,
+                size_pixels: font_size,
+                ..Default::default()
+            }),
+        }]);
+
+        let renderer_config = RendererConfig {
+            texture_format: config.format,
+            ..Default::default()
+        };
+        let mut renderer = Renderer::new(&mut imgui, &device, &queue, renderer_config);
+
+        let font = imgui.fonts().add_font(&[FontSource::TtfData {
+            data: &load_font("Montserrat-Regular.ttf").unwrap(),
+            size_pixels: 16.0,
+            config: Some(FontConfig {
+                rasterizer_multiply: 1.75,
+                ..FontConfig::default()
+            }),
+        }]);
+
+        ui_theme(&mut imgui);
+
+        renderer.reload_font_texture(&mut imgui, &device, &queue);
 
         Self {
             surface,
@@ -379,6 +429,7 @@ impl<'a> State<'a> {
             camera,
             projection,
             camera_controller,
+            right_mouse_pressed: false,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
@@ -392,6 +443,10 @@ impl<'a> State<'a> {
             hdr,
             environment_bind_group,
             sky_pipeline,
+            imgui,
+            platform,
+            renderer,
+            font,
         }
     }
 
@@ -424,6 +479,14 @@ impl<'a> State<'a> {
                     },
                 ..
             } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseInput {
+                button: winit::event::MouseButton::Right,
+                state,
+                ..
+            } => {
+                self.right_mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
             _ => false,
         }
     }
@@ -439,6 +502,7 @@ impl<'a> State<'a> {
                 * old_position)
                 .into();
         self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
+        self.imgui.io_mut().update_delta_time(dt);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -505,7 +569,47 @@ impl<'a> State<'a> {
             render_pass.draw(0..3, 0..1);
         }
 
+        self.platform.prepare_frame(self.imgui.io_mut(), self.window).expect("failed to prepare imgui frame!");
+        let ui = self.imgui.frame();
+        let token = ui.push_font(self.font);
+
+        {
+            let window = ui.window("hello, imgui!");
+            window
+                .size([300.0, 100.0], Condition::FirstUseEver)
+                .build(|| {
+                    ui.text("hello world!");
+                    ui.text("this is a demo of imgui-rs using imgui-wgpu!");
+                    ui.button("button test");
+                });
+        }
+
+        token.pop();
+
+        self.platform.prepare_render(&ui, self.window);
+
         self.hdr.process(&mut encoder, &view);
+
+        {
+            let mut imgui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("UI RenderPass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            self.renderer.render(self.imgui.render(), &self.queue, &self.device, &mut imgui_pass).expect("failed to render ui!");
+            drop(imgui_pass);
+        }
+
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -532,7 +636,7 @@ pub async fn run() {
             Event::DeviceEvent {
                 event: DeviceEvent::MouseMotion{ delta, },
                 ..
-            } => {
+            } => if state.right_mouse_pressed {
                 state.camera_controller.process_mouse(delta.0, delta.1)
             }
             Event::WindowEvent {
