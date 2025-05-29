@@ -7,6 +7,8 @@ use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Write;
 use std::io::Read;
+use zstd::stream::{Encoder, Decoder};
+use std::io::{BufReader, BufWriter};
 
 pub struct World {
     entity_manager: EntityManager,
@@ -74,29 +76,39 @@ impl World {
     }
 
     pub fn save_to_file(&self, path: &str) {
-        let mut file = File::create(path).expect("failed to create file!");
-        file.write_all(b"LSCN").expect("failed to write magic bytes!");
-        bincode::serialize_into(&mut file, &self.components.len()).expect("failed to write component count!");
+        let file = File::create(path).expect("failed to create file!");
+        let mut writer = BufWriter::new(file);
+
+        writer.write_all(b"LSCN").expect("failed to write magic bytes!");
+
+        let mut encoder = Encoder::new(writer, 0).expect("failed to create zstd encoder");
+
+        bincode::serialize_into(&mut encoder, &self.components.len()).expect("failed to write component count!");
 
         for (_type_id, component_storage) in &self.components {
-            component_storage.serialize_component_data(&mut file);
+            component_storage.serialize_component_data(&mut encoder);
         }
+
+        encoder.finish().expect("failed to finish compression");
     }
 
     pub fn load_from_file(&mut self, path: &str) {
-        let mut file = File::open(path).expect("failed to open file!");
+        let file = File::open(path).expect("failed to open file!");
+        let mut reader = BufReader::new(file);
 
         let mut magic = [0u8; 4];
-        file.read_exact(&mut magic).expect("failed to read magic bytes!");
+        reader.read_exact(&mut magic).expect("failed to read magic bytes!");
         if &magic != b"LSCN" {
             panic!("invalid file format: magic bytes do not match!");
         }
 
-        let count: usize = bincode::deserialize_from(&mut file).expect("failed to read component count!");
+        let mut decoder = Decoder::new(reader).expect("failed to create zstd decoder");
+
+        let count: usize = bincode::deserialize_from(&mut decoder).expect("failed to read component count!");
         assert_eq!(count, self.components.len(), "component count mismatch!");
 
         for component_storage in self.components.values_mut() {
-            component_storage.deserialize_component_data(&mut file);
+            component_storage.deserialize_component_data(&mut decoder);
         }
     }
 

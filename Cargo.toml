@@ -20,6 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 imgui-wgpu = "0.25.0"
 imgui = "0.12.0"
 imgui-winit-support = "0.12.0"
+zstd = "0.13.3"
 
 [dependencies.image]
 version = "0.24"
